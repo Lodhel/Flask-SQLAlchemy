@@ -5,6 +5,7 @@ import typing as t
 
 import sqlalchemy as sa
 import sqlalchemy.orm as sa_orm
+from flask import has_app_context
 
 from .query import Query
 
@@ -19,7 +20,12 @@ class _QueryProperty:
     """
 
     def __get__(self, obj: Model | None, cls: type[Model]) -> Query:
-        return cls.query_class(cls, session=cls.__fsa__.session())
+        if has_app_context():
+            session = cls.__fsa__.session()
+        else:
+            engine = cls.__fsa__.engine
+            session = sa_orm.sessionmaker(bind=engine)()
+        return cls.query_class(cls, session=session)
 
 
 class Model:

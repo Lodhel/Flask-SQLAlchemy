@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextvars
 import os
+import threading
 import types
 import typing as t
 import warnings
@@ -389,27 +391,23 @@ class SQLAlchemy:
     def _make_scoped_session(
         self, options: dict[str, t.Any]
     ) -> sa_orm.scoped_session[Session]:
-        """Create a :class:`sqlalchemy.orm.scoping.scoped_session` around the factory
-        from :meth:`_make_session_factory`. The result is available as :attr:`session`.
+        scope = options.pop("scopefunc", None)
 
-        The scope function can be customized using the ``scopefunc`` key in the
-        ``session_options`` parameter to the extension. By default it uses the current
-        thread or greenlet id.
+        if scope is None:
+            _scope_var = contextvars.ContextVar(
+                "flask_sqlalchemy_scope_id",
+                default=None
+            )
 
-        This method is used for internal setup. Its signature may change at any time.
+            def scopefunc():
+                cid = _scope_var.get()
+                if cid is None:
+                    cid = threading.get_ident()
+                    _scope_var.set(cid)
+                return cid
 
-        :meta private:
+            scope = scopefunc
 
-        :param options: The ``session_options`` parameter from ``__init__``. Keyword
-            arguments passed to the session factory. A ``scopefunc`` key is popped.
-
-        .. versionchanged:: 3.0
-            The session is scoped to the current app context.
-
-        .. versionchanged:: 3.0
-            Renamed from ``create_scoped_session``, this method is internal.
-        """
-        scope = options.pop("scopefunc", _app_ctx_id)
         factory = self._make_session_factory(options)
         return sa_orm.scoped_session(factory, scope)
 
@@ -447,7 +445,8 @@ class SQLAlchemy:
 
         .. versionadded:: 3.0
         """
-        self.session.remove()
+        if has_app_context():
+            self.session.remove()
 
     def _make_metadata(self, bind_key: str | None) -> sa.MetaData:
         """Get or create a :class:`sqlalchemy.schema.MetaData` for the given bind key.

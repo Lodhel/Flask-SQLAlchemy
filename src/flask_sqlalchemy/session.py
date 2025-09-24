@@ -75,7 +75,13 @@ class Session(sa_orm.Session):
         if None in engines:
             return engines[None]
 
-        return super().get_bind(mapper=mapper, clause=clause, bind=bind, **kwargs)
+        try:
+            engine = super().get_bind(mapper=mapper, clause=clause, bind=bind, **kwargs)
+            conn = engine.connect()
+            conn.close()
+            return engine
+        except Exception:
+            return self._db.engine
 
 
 def _clause_to_engine(
