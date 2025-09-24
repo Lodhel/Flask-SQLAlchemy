@@ -436,6 +436,7 @@ class SQLAlchemy:
         """
         options.setdefault("class_", Session)
         options.setdefault("query_cls", self.Query)
+        options.setdefault("expire_on_commit", False)
         return sa_orm.sessionmaker(db=self, **options)
 
     def _teardown_session(self, exc: BaseException | None) -> None:
